@@ -2,6 +2,7 @@ import socket
 import threading
 import json
 import os
+import re
 
 LOCK = threading.Lock()
 JSON_FILE_PATH = "lista_arquivos.json"
@@ -73,17 +74,23 @@ def process_command(command, args, client_ip, all_files, client_socket):
             return "CONFIRMDELETEFILE"
         return "FILENOTFOUND"
 
-    elif command == "SEARCH":
-        if len(args) != 1:
-            return "INVALIDCOMMAND"
-        filename = args[0]
-        results = [
-            f"FILE {f['filename']} {ip} {f['size']}"
-            for ip, files in all_files.items()
-            for f in files
-            if f["filename"] == filename
-        ]
-        return "\n".join(results) if results else "FILENOTFOUND"
+    elif command == 'SEARCH':
+        filename_pattern = args[0]
+        try:
+            regex = re.compile(filename_pattern)
+            results = [
+                f"FILE {f['filename']} {ip} {f['size']}" 
+                for ip, files in all_files.items()
+                for f in files if regex.search(f['filename'])
+            ]
+            if results:
+                client_socket.sendall("\n".join(results).encode())
+                return
+            else:
+                client_socket.sendall(b"FILENOTFOUND")
+        except re.error:
+            client_socket.sendall(b"INVALIDREGEX")
+
 
     elif command == "LEAVE":
         if client_ip in all_files:
@@ -102,7 +109,7 @@ def process_command(command, args, client_ip, all_files, client_socket):
     
     elif command == "LISTFILES":
         files_list = [
-            f"FILE {file['filename']} {file['size']} {ip}"
+            f"FILE {file['filename']} {ip} {file['size']}"
             for ip, files in all_files.items()
             for file in files
         ]
