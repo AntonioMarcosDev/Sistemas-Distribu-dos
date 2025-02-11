@@ -4,7 +4,7 @@ import json
 import os
 
 LOCK = threading.Lock()
-JSON_FILE_PATH = "server_data.json"
+JSON_FILE_PATH = "lista_arquivos.json"
 SERVER_PORT = 1234
 
 
@@ -29,7 +29,7 @@ def handle_client(client_socket, client_address, all_files):
         while message := client_socket.recv(1024).decode():
             print(f"[LOG] {client_ip} sent: {message}")
             command, *args = message.split()
-            response = process_command(command, args, client_ip, all_files)
+            response = process_command(command, args, client_ip, all_files, client_socket)
             client_socket.sendall(response.encode())
     except Exception as e:
         print(f"[ERROR] {client_ip}: {e}")
@@ -37,7 +37,7 @@ def handle_client(client_socket, client_address, all_files):
         client_socket.close()
 
 
-def process_command(command, args, client_ip, all_files):
+def process_command(command, args, client_ip, all_files, client_socket):
     if command == "JOIN":
         if client_ip not in all_files:
             all_files[client_ip] = []
@@ -94,16 +94,29 @@ def process_command(command, args, client_ip, all_files):
             if files
             else "NOFILES"
         )
+    
+    elif command == "LISTALLFILES":
+        files_list = [
+            f"{file['filename']} {file['size']} {ip}"
+            for ip, files in all_files.items()
+            for file in files
+        ]
+        return "\n".join(files_list) if files_list else "NOFILES"
 
     return "UNKNOWNCOMMAND"
 
+def get_server_ip():
+    hostname = socket.gethostname()
+    server_ip = socket.gethostbyname(hostname)
+    return server_ip
 
 def start_server():
     all_files = load_files()
+    server_ip = get_server_ip()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind(("", SERVER_PORT))
         server_socket.listen(5)
-        print(f"[SERVER] Listening on port {SERVER_PORT}")
+        print(f"[SERVER] Listening on {server_ip} on port {SERVER_PORT}")
         try:
             while True:
                 client_socket, client_address = server_socket.accept()
