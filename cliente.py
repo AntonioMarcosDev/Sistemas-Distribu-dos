@@ -25,7 +25,7 @@ def join_server(server_ip):
     print(response)
 
 
-def refresh_list(server_ip):
+def sync_list(server_ip):
     files_local = {
         f
         for f in os.listdir(PUBLIC_FOLDER)
@@ -38,12 +38,17 @@ def refresh_list(server_ip):
         else {line.split()[0] for line in response.split("\n")}
     )
 
-    for file in files_local - files_server:
-        size = os.path.getsize(os.path.join(PUBLIC_FOLDER, file))
-        print(send_request(server_ip, f"CREATEFILE {file} {size}\n"))
+    added_files = files_local - files_server
+    deleted_files = files_server - files_local
 
-    for file in files_server - files_local:
-        print(send_request(server_ip, f"DELETEFILE {file}\n"))
+    if added_files:
+        send_request(server_ip, "\n".join(f"CREATEFILE {file} {os.path.getsize(os.path.join(PUBLIC_FOLDER, file))}" for file in added_files))
+    if deleted_files:
+        confirm = input(f"Os seguintes arquivos serão deletados:\n{', '.join(deleted_files)}\nVocê quer prosseguir? (yes/no): ")
+        if confirm.lower() == 'yes':
+            for file in deleted_files:
+                send_request(server_ip, f"DELETEFILE {file}\n")
+    print("Sincronização concluída com sucesso.")
 
 
 def search_file(server_ip, filename):
@@ -55,11 +60,10 @@ def get_file(client_ip, filename, offset_start, offset_end=None):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.connect((client_ip, CLIENT_PORT))
-            message = (
-                f"GET {filename} {offset_start} {offset_end}\n"
-                if offset_end
-                else f"GET {filename} {offset_start}\n"
-            )
+            if offset_end is not None:
+                message = f"GET {filename} {offset_start} {offset_end}\n"
+            else:
+                message = f"GET {filename} {offset_start}\n"
             client_socket.sendall(message.encode())
             with open(os.path.join(PUBLIC_FOLDER, filename), "wb") as file:
                 while data := client_socket.recv(1024):
@@ -115,10 +119,12 @@ def main():
 
         if cmd == "HELP":
             print(
-                "Commands: \nJOIN <your_ip>;\nREFRESH <server_ip>;\nSEARCH <server_ip> <filename>;\nGET <client_ip> <filename> <offset_start> [offset_end];\nLEAVE <server_ip>;\nEXIT\n"
+                "Commands: \nJOIN <server_ip>;\nSYNC <server_ip>;\nREFRESH <server_ip>;\nSEARCH <server_ip> <filename>;\nGET <client_ip> <filename> <offset_start> [offset_end];\nLEAVE <server_ip>;\nEXIT\n"
             )
         elif cmd == "JOIN" and len(args) == 1:
             join_server(args[0])
+        elif cmd == "SYNC" and len(args) == 1:
+            sync_list(args[0])
         elif cmd == "REFRESH" and len(args) == 1:
             refresh_list(args[0])
         elif cmd == "SEARCH" and len(args) == 2:
