@@ -69,7 +69,12 @@ def sync_list(server_ip):
 
 def search_file(server_ip, filename):
     response = send_request(server_ip, f"SEARCH {filename}\n")
-    messagebox.showinfo("Response", response)
+    if response == "FILENOTFOUND":
+        messagebox.showinfo("Response", "Nenhum arquivo encontrado.")
+    else:
+        files = response.split("\n")
+        message = "Arquivos encontrados:\n" + "\n".join(files)
+        messagebox.showinfo("Response", message)
 
 
 def get_file(client_ip, filename, offset_start, offset_end=None):
@@ -218,7 +223,7 @@ def create_gui():
     frame = tk.Frame(root, bg="#2c3e50")
     frame.pack(pady=10, padx=10, fill="both", expand=True)
 
-    columns = ("Nome do Arquivo", "Dono (IP)", "Tamanho (bytes)")
+    columns = ("Nome do Arquivo", "Tamanho (bytes)", "Dono (IP)")
     tree = ttk.Treeview(frame, columns=columns, show="headings", height=15)
     tree.heading("Nome do Arquivo", text="Nome do Arquivo")
     tree.heading("Dono (IP)", text="Dono (IP)")
