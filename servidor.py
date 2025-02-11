@@ -17,6 +17,7 @@ def load_files():
 
 
 def save_files(dados):
+    print(f"[LOG] Saving files: {dados}")
     with LOCK:
         with open(JSON_FILE_PATH, "w") as f:
             json.dump(dados, f, indent=4)
@@ -29,6 +30,7 @@ def handle_client(client_socket, client_address, all_files):
         while message := client_socket.recv(1024).decode():
             print(f"[LOG] {client_ip} sent: {message}")
             command, *args = message.split()
+            print(f"[LOG] {command} {args}")
             response = process_command(command, args, client_ip, all_files, client_socket)
             client_socket.sendall(response.encode())
     except Exception as e:
@@ -49,10 +51,13 @@ def process_command(command, args, client_ip, all_files, client_socket):
         if len(args) != 2:
             return "INVALIDCOMMAND"
         filename, size = args
+        print(f"[LOG] {filename} {size}")
+        print(f"[LOG] {args}")
         size = int(size)
         if any(f["filename"] == filename for f in all_files.get(client_ip, [])):
             return "FILEALREADYEXISTS"
         all_files[client_ip].append({"filename": filename, "size": size})
+        print(f"[LOG] {all_files}")
         save_files(all_files)
         return "CONFIRMCREATEFILE"
 
@@ -87,7 +92,7 @@ def process_command(command, args, client_ip, all_files, client_socket):
             return "CONFIRMLEAVE"
         return "CLIENTNOTFOUND"
 
-    elif command == "LISTFILES":
+    elif command == "SYNCFILES":
         files = all_files.get(client_ip, [])
         return (
             "\n".join(f"{file['filename']} {file['size']}" for file in files)
@@ -95,9 +100,9 @@ def process_command(command, args, client_ip, all_files, client_socket):
             else "NOFILES"
         )
     
-    elif command == "LISTALLFILES":
+    elif command == "LISTFILES":
         files_list = [
-            f"{file['filename']} {file['size']} {ip}"
+            f"FILE {file['filename']} {file['size']} {ip}"
             for ip, files in all_files.items()
             for file in files
         ]
@@ -121,6 +126,7 @@ def start_server():
             while True:
                 client_socket, client_address = server_socket.accept()
                 print(f"[CONNECTION] {client_address} connected.")
+                print(f"[LOG] {all_files}")
                 threading.Thread(
                     target=handle_client,
                     args=(client_socket, client_address, all_files),
