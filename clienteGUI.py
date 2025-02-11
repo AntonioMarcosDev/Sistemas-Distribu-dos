@@ -18,6 +18,7 @@ if not os.path.exists(PUBLIC_FOLDER):
 
 def send_request(server_ip, message):
     try:
+        print(f"[DEBUG] Sending message: {message}")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.connect((server_ip, SERVER_PORT))
             client_socket.sendall(message.encode())
@@ -49,15 +50,20 @@ def sync_list(server_ip):
         else {line.split()[0] for line in response.split("\n")}
     )
 
-    added_files = files_local - files_server
+    for file in files_local - files_server:
+        try:
+            size = os.path.getsize(os.path.join(PUBLIC_FOLDER, file))
+            send_request(server_ip, f"CREATEFILE {file} {size}\n")
+        except OSError as e:
+            print(f"[ERROR] Could not get size of file {file}: {e}")
+        
     deleted_files = files_server - files_local
-
-    if added_files:
-        send_request(server_ip, "\n".join(f"CREATEFILE {file} {os.path.getsize(os.path.join(PUBLIC_FOLDER, file))}" for file in added_files))
-    if deleted_files:
-        if messagebox.askyesno("Confirm Delete", f"Os seguintes arquivos serão deletados:\n{', '.join(deleted_files)}\nVocê quer prosseguir?"):
-            for file in deleted_files:
-                send_request(server_ip, f"DELETEFILE {file}\n")
+    
+    if deleted_files != {'FILE'}:
+        for file in deleted_files:
+            if messagebox.askyesno("Confirm Delete", f"Os seguintes arquivos serão deletados:\n{', '.join(deleted_files)}\nVocê quer prosseguir?"):
+                for file in deleted_files:
+                    send_request(server_ip, f"DELETEFILE {file}\n")
     messagebox.showinfo("Sync Complete", "Sincronização concluída com sucesso.")
 
 
@@ -141,7 +147,7 @@ def create_gui():
     def refresh_command():
         if server_ip:
             tree.delete(*tree.get_children())
-            response = send_request(server_ip, "LISTALLFILES\n")
+            response = send_request(server_ip, "LISTFILES\n")
             
             if response == "NOFILES":
                 messagebox.showinfo("Info", "Sem arquivos disponíveis no servidor.")
@@ -149,9 +155,10 @@ def create_gui():
 
             for line in response.split("\n"):
                 parts = line.split()
-                if len(parts) == 3:
-                    file_name, file_size, owner_ip = parts
-                    tree.insert("", "end", values=(file_name, file_size, owner_ip))
+                print(parts)
+                if len(parts) == 4:
+                    type, file_name, file_size, owner_ip = parts
+                    tree.insert("", "end", values=(file_name, owner_ip, file_size))
         else:
             tree.delete(*tree.get_children())
             messagebox.showwarning("Warning", "Você não está conectado a nenhum servidor.")
@@ -211,14 +218,14 @@ def create_gui():
     frame = tk.Frame(root, bg="#2c3e50")
     frame.pack(pady=10, padx=10, fill="both", expand=True)
 
-    columns = ("Nome do Arquivo", "Tamanho (bytes)", "Dono (IP)")
+    columns = ("Nome do Arquivo", "Dono (IP)", "Tamanho (bytes)")
     tree = ttk.Treeview(frame, columns=columns, show="headings", height=15)
     tree.heading("Nome do Arquivo", text="Nome do Arquivo")
-    tree.heading("Tamanho (bytes)", text="Tamanho (bytes)")
     tree.heading("Dono (IP)", text="Dono (IP)")
+    tree.heading("Tamanho (bytes)", text="Tamanho (bytes)")
     tree.column("Nome do Arquivo", anchor="w", width=350)
-    tree.column("Tamanho (bytes)", anchor="center", width=150)
     tree.column("Dono (IP)", anchor="center", width=200)
+    tree.column("Tamanho (bytes)", anchor="center", width=150)
     
      
     scrollbar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
