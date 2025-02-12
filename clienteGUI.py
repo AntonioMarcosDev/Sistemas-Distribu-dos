@@ -57,13 +57,10 @@ def sync_list(server_ip):
         except OSError as e:
             print(f"[ERROR] Could not get size of file {file}: {e}")
         
-    deleted_files = files_server - files_local
-    
-    if deleted_files != {'FILE'}:
-        for file in deleted_files:
-            if messagebox.askyesno("Confirm Delete", f"Os seguintes arquivos serão deletados:\n{', '.join(deleted_files)}\nVocê quer prosseguir?"):
-                for file in deleted_files:
-                    send_request(server_ip, f"DELETEFILE {file}\n")
+    for file in files_server - files_local:
+        if messagebox.askyesno("Confirm Delete", f"Os seguintes arquivos serão deletados:\n{', '.join(deleted_files)}\nVocê quer prosseguir?"):
+            for file in deleted_files:
+                send_request(server_ip, f"DELETEFILE {file}\n")
     messagebox.showinfo("Sync Complete", "Sincronização concluída com sucesso.")
 
 
@@ -73,8 +70,28 @@ def search_file(server_ip, filename):
         messagebox.showinfo("Response", "Nenhum arquivo encontrado.")
     else:
         files = response.split("\n")
-        message = "Arquivos encontrados:\n" + "\n".join(files)
-        messagebox.showinfo("Response", message)
+
+        result_window = tk.Toplevel()
+        result_window.title("Arquivos Encontrados")
+        result_window.geometry("600x400")
+        
+        columns = ("Nome do Arquivo", "Dono (IP)", "Tamanho (bytes)")
+        tree = ttk.Treeview(result_window, columns=columns, show="headings")
+        tree.heading("Nome do Arquivo", text="Nome do Arquivo")
+        tree.heading("Dono (IP)", text="Dono (IP)")
+        tree.heading("Tamanho (bytes)", text="Tamanho (bytes)")
+        
+        tree.column("Nome do Arquivo", anchor="w", width=200)
+        tree.column("Dono (IP)", anchor="center", width=150)
+        tree.column("Tamanho (bytes)", anchor="center", width=100)
+        
+        for file in files:
+            if file:
+                parts = file.split()
+                if len(parts) == 4:
+                    tree.insert("", "end", values=(parts[1], parts[2], parts[3]))
+        
+        tree.pack(fill="both", expand=True)
 
 
 def get_file(client_ip, filename, offset_start, offset_end=None):
@@ -89,7 +106,7 @@ def get_file(client_ip, filename, offset_start, offset_end=None):
             with open(os.path.join(PUBLIC_FOLDER, filename), "wb") as file:
                 while data := client_socket.recv(1024):
                     file.write(data)
-            messagebox.showinfo("Info", f"File {filename} downloaded successfully.")
+            messagebox.showinfo("Info", f"Arquivo {filename} baixado com sucesso.")
     except Exception as e:
         messagebox.showerror("Error", f"[ERROR] {e}")
 
